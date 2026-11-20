@@ -169,6 +169,12 @@ def _denoise(ctx, p):
     ctx.vf.append("hqdn3d")
 
 
+def _reverse(ctx, p):
+    # play it backwards, picture and sound together
+    ctx.vf.append("reverse")
+    ctx.af.append("areverse")
+
+
 def _volume(ctx, p):
     ctx.af.append(f"volume={_num('volume', p, 'factor', lo=0, hi=5):.3f}")
 
@@ -251,6 +257,7 @@ OPS = {
     "sharpen": {"description": "Crisp edges, 0 to 5.", "params": {"strength": {"type": "number", "min": 0, "max": 5}}, "build": _sharpen},
     "vignette": {"description": "Darken the corners, 0 to 1.", "params": {"strength": {"type": "number", "min": 0, "max": 1}}, "build": _vignette},
     "denoise": {"description": "Clean up grain and noise.", "params": {}, "build": _denoise},
+    "reverse": {"description": "Play the clip backwards, video and audio.", "params": {}, "build": _reverse},
     "volume": {"description": "Audio volume, 0 to 5.", "params": {"factor": {"type": "number", "min": 0, "max": 5}}, "build": _volume},
     "mute": {"description": "Drop the audio track.", "params": {}, "build": _mute},
     "fade_in": {"description": "Fade in from black, video and audio.", "params": {"duration": {"type": "number", "min": 0.1, "max": 30}}, "build": _fade_in},
