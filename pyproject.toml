@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vidforge"
+version = "0.1.0"
+description = "Professional video editing toolkit built for AI agents. CLI, Python API and MCP server."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Alfredo Ramos"}]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+vidforge = "vidforge.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vidforge*"]
