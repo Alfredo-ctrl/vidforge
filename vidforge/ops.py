@@ -175,6 +175,11 @@ def _reverse(ctx, p):
     ctx.af.append("areverse")
 
 
+def _invert(ctx, p):
+    # negative video, colours flipped; audio untouched
+    ctx.vf.append("negate")
+
+
 def _volume(ctx, p):
     ctx.af.append(f"volume={_num('volume', p, 'factor', lo=0, hi=5):.3f}")
 
@@ -258,6 +263,7 @@ OPS = {
     "vignette": {"description": "Darken the corners, 0 to 1.", "params": {"strength": {"type": "number", "min": 0, "max": 1}}, "build": _vignette},
     "denoise": {"description": "Clean up grain and noise.", "params": {}, "build": _denoise},
     "reverse": {"description": "Play the clip backwards, video and audio.", "params": {}, "build": _reverse},
+    "invert": {"description": "Negative video, colours flipped. Audio untouched.", "params": {}, "build": _invert},
     "volume": {"description": "Audio volume, 0 to 5.", "params": {"factor": {"type": "number", "min": 0, "max": 5}}, "build": _volume},
     "mute": {"description": "Drop the audio track.", "params": {}, "build": _mute},
     "fade_in": {"description": "Fade in from black, video and audio.", "params": {"duration": {"type": "number", "min": 0.1, "max": 30}}, "build": _fade_in},
