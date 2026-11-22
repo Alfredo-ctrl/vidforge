@@ -180,6 +180,17 @@ def _invert(ctx, p):
     ctx.vf.append("negate")
 
 
+def _sepia(ctx, p):
+    # warm old-photo tone; audio untouched
+    strength = _num("sepia", p, "intensity", 1, lo=0, hi=1)
+    ctx.vf.append(
+        "colorchannelmixer="
+        f"{0.393 * strength + (1 - strength):.3f}:{0.769 * strength:.3f}:{0.189 * strength:.3f}:"
+        f"{0.349 * strength:.3f}:{0.686 * strength + (1 - strength):.3f}:{0.168 * strength:.3f}:"
+        f"{0.272 * strength:.3f}:{0.534 * strength:.3f}:{0.131 * strength + (1 - strength):.3f}"
+    )
+
+
 def _volume(ctx, p):
     ctx.af.append(f"volume={_num('volume', p, 'factor', lo=0, hi=5):.3f}")
 
@@ -264,6 +275,7 @@ OPS = {
     "denoise": {"description": "Clean up grain and noise.", "params": {}, "build": _denoise},
     "reverse": {"description": "Play the clip backwards, video and audio.", "params": {}, "build": _reverse},
     "invert": {"description": "Negative video, colours flipped. Audio untouched.", "params": {}, "build": _invert},
+    "sepia": {"description": "Warm old-photo tone. 0 keeps the original, 1 is full sepia. Audio untouched.", "params": {"intensity": {"type": "number", "default": 1, "min": 0, "max": 1}}, "build": _sepia},
     "volume": {"description": "Audio volume, 0 to 5.", "params": {"factor": {"type": "number", "min": 0, "max": 5}}, "build": _volume},
     "mute": {"description": "Drop the audio track.", "params": {}, "build": _mute},
     "fade_in": {"description": "Fade in from black, video and audio.", "params": {"duration": {"type": "number", "min": 0.1, "max": 30}}, "build": _fade_in},
