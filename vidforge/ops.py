@@ -103,6 +103,16 @@ def _crop(ctx, p):
     ctx.vf.append(f"crop={w}:{h}:{x}:{y}")
 
 
+def _pad(ctx, p):
+    # frame it in a bigger canvas, centred, for a fixed size or aspect
+    w = _int("pad", p, "width", lo=16)
+    h = _int("pad", p, "height", lo=16)
+    color = p.get("color", "black")
+    if not isinstance(color, str) or not color:
+        raise ValueError("'pad': 'color' has to be a colour name or hex, e.g. 'black'")
+    ctx.vf.append(f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:{color}")
+
+
 def _rotate(ctx, p):
     deg = p.get("degrees", 90)
     if deg == 90:
@@ -167,6 +177,14 @@ def _vignette(ctx, p):
 
 def _denoise(ctx, p):
     ctx.vf.append("hqdn3d")
+
+
+def _noise(ctx, p):
+    # film grain on top; 0 leaves the picture alone
+    s = _int("noise", p, "strength", 20, lo=0, hi=100)
+    if s == 0:
+        return
+    ctx.vf.append(f"noise=alls={s}:allf=t")
 
 
 def _reverse(ctx, p):
@@ -259,6 +277,7 @@ OPS = {
     "speed": {"description": "Play faster or slower, video and audio together.", "params": {"factor": {"type": "number", "default": 1, "min": 0.25, "max": 4}}, "build": _speed},
     "scale": {"description": "Resize. Use -1 on one side to keep the aspect ratio.", "params": {"width": {"type": "integer", "default": -1}, "height": {"type": "integer", "default": -1}}, "build": _scale},
     "crop": {"description": "Cut a rectangle out of the frame.", "params": {"width": {"type": "integer", "min": 2}, "height": {"type": "integer", "min": 2}, "x": {"type": "integer", "default": 0, "min": 0}, "y": {"type": "integer", "default": 0, "min": 0}}, "build": _crop},
+    "pad": {"description": "Frame the video in a bigger canvas, centred. Good for a fixed size or aspect ratio.", "params": {"width": {"type": "integer", "min": 16}, "height": {"type": "integer", "min": 16}, "color": {"type": "string", "default": "black"}}, "build": _pad},
     "rotate": {"description": "Rotate the frame.", "params": {"degrees": {"type": "integer", "enum": [90, 180, 270], "default": 90}}, "build": _rotate},
     "flip_h": {"description": "Mirror left-right.", "params": {}, "build": _flip_h},
     "flip_v": {"description": "Flip top-bottom.", "params": {}, "build": _flip_v},
@@ -273,6 +292,7 @@ OPS = {
     "sharpen": {"description": "Crisp edges, 0 to 5.", "params": {"strength": {"type": "number", "min": 0, "max": 5}}, "build": _sharpen},
     "vignette": {"description": "Darken the corners, 0 to 1.", "params": {"strength": {"type": "number", "min": 0, "max": 1}}, "build": _vignette},
     "denoise": {"description": "Clean up grain and noise.", "params": {}, "build": _denoise},
+    "noise": {"description": "Add film grain on top, 0 to 100. 0 leaves the picture alone.", "params": {"strength": {"type": "integer", "default": 20, "min": 0, "max": 100}}, "build": _noise},
     "reverse": {"description": "Play the clip backwards, video and audio.", "params": {}, "build": _reverse},
     "invert": {"description": "Negative video, colours flipped. Audio untouched.", "params": {}, "build": _invert},
     "sepia": {"description": "Warm old-photo tone. 0 keeps the original, 1 is full sepia. Audio untouched.", "params": {"intensity": {"type": "number", "default": 1, "min": 0, "max": 1}}, "build": _sepia},
