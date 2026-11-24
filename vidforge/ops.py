@@ -27,6 +27,7 @@ class Ctx:
         self.frame_time = 0.0
         self.gif = {}
         self.mute = False
+        self.loops = 0
 
 
 def _num(op, params, key, default=None, lo=None, hi=None):
@@ -209,6 +210,11 @@ def _sepia(ctx, p):
     )
 
 
+def _loop(ctx, p):
+    # play the clip end to end N times, picture and sound together
+    ctx.loops = _int("loop", p, "times", 2, lo=2, hi=10)
+
+
 def _volume(ctx, p):
     ctx.af.append(f"volume={_num('volume', p, 'factor', lo=0, hi=5):.3f}")
 
@@ -296,6 +302,7 @@ OPS = {
     "reverse": {"description": "Play the clip backwards, video and audio.", "params": {}, "build": _reverse},
     "invert": {"description": "Negative video, colours flipped. Audio untouched.", "params": {}, "build": _invert},
     "sepia": {"description": "Warm old-photo tone. 0 keeps the original, 1 is full sepia. Audio untouched.", "params": {"intensity": {"type": "number", "default": 1, "min": 0, "max": 1}}, "build": _sepia},
+    "loop": {"description": "Repeat the clip end to end. times=2 plays it twice, video and audio.", "params": {"times": {"type": "integer", "default": 2, "min": 2, "max": 10}}, "build": _loop},
     "volume": {"description": "Audio volume, 0 to 5.", "params": {"factor": {"type": "number", "min": 0, "max": 5}}, "build": _volume},
     "mute": {"description": "Drop the audio track.", "params": {}, "build": _mute},
     "fade_in": {"description": "Fade in from black, video and audio.", "params": {"duration": {"type": "number", "min": 0.1, "max": 30}}, "build": _fade_in},

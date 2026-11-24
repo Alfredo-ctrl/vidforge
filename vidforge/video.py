@@ -24,6 +24,8 @@ def apply_ops(input_path, output_path, ops):
     # fade_out needs the real end time, so pin it to the clip length
     if "fade_out" in applied:
         total = ctx.duration if ctx.duration is not None else info_in["duration"]
+        if ctx.loops:
+            total = total * ctx.loops
         start = ctx.start or 0
         for i, f in enumerate(ctx.vf):
             if f.startswith("fade=t=out:"):
@@ -39,6 +41,8 @@ def apply_ops(input_path, output_path, ops):
         cmd += ["-ss", str(ctx.start)]
     if ctx.duration is not None and ctx.mode == "video":
         cmd += ["-t", str(ctx.duration)]
+    if ctx.loops:
+        cmd += ["-stream_loop", str(ctx.loops - 1)]
     cmd += ["-i", input_path]
 
     if ctx.mode == "audio":

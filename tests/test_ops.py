@@ -103,6 +103,12 @@ class TestVidforge(unittest.TestCase):
         self.assertTrue(out["has_audio"])
         self.assertTrue(os.path.getsize(self.out("noise.mp4")) > 1000)
 
+    def test_loop(self):
+        out = apply_ops(self.clip, self.out("loop.mp4"), [{"op": "loop", "times": 2}])
+        self.assertAlmostEqual(out["duration"], 8, delta=0.4)
+        self.assertTrue(out["has_audio"])
+        self.assertTrue(os.path.getsize(self.out("loop.mp4")) > 1000)
+
     def test_audio_ops(self):
         out = apply_ops(self.clip, self.out("a.mp4"),
                         [{"op": "volume", "factor": 0.5},
