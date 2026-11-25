@@ -103,6 +103,12 @@ class TestVidforge(unittest.TestCase):
         self.assertTrue(out["has_audio"])
         self.assertTrue(os.path.getsize(self.out("noise.mp4")) > 1000)
 
+    def test_pixelate(self):
+        out = apply_ops(self.clip, self.out("pix.mp4"), [{"op": "pixelate", "block": 16}])
+        self.assertAlmostEqual(out["duration"], 4, delta=0.3)
+        self.assertTrue(out["has_audio"])
+        self.assertTrue(os.path.getsize(self.out("pix.mp4")) > 1000)
+
     def test_loop(self):
         out = apply_ops(self.clip, self.out("loop.mp4"), [{"op": "loop", "times": 2}])
         self.assertAlmostEqual(out["duration"], 8, delta=0.4)

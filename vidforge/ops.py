@@ -188,6 +188,12 @@ def _noise(ctx, p):
     ctx.vf.append(f"noise=alls={s}:allf=t")
 
 
+def _pixelate(ctx, p):
+    # chunky mosaic look, like an old game; bigger blocks = chunkier
+    b = _int("pixelate", p, "block", 16, lo=2, hi=64)
+    ctx.vf.append(f"pixelize=w={b}:h={b}")
+
+
 def _reverse(ctx, p):
     # play it backwards, picture and sound together
     ctx.vf.append("reverse")
@@ -299,6 +305,7 @@ OPS = {
     "vignette": {"description": "Darken the corners, 0 to 1.", "params": {"strength": {"type": "number", "min": 0, "max": 1}}, "build": _vignette},
     "denoise": {"description": "Clean up grain and noise.", "params": {}, "build": _denoise},
     "noise": {"description": "Add film grain on top, 0 to 100. 0 leaves the picture alone.", "params": {"strength": {"type": "integer", "default": 20, "min": 0, "max": 100}}, "build": _noise},
+    "pixelate": {"description": "Chunky mosaic look, like an old game. Bigger blocks are chunkier.", "params": {"block": {"type": "integer", "default": 16, "min": 2, "max": 64}}, "build": _pixelate},
     "reverse": {"description": "Play the clip backwards, video and audio.", "params": {}, "build": _reverse},
     "invert": {"description": "Negative video, colours flipped. Audio untouched.", "params": {}, "build": _invert},
     "sepia": {"description": "Warm old-photo tone. 0 keeps the original, 1 is full sepia. Audio untouched.", "params": {"intensity": {"type": "number", "default": 1, "min": 0, "max": 1}}, "build": _sepia},
