@@ -1,6 +1,6 @@
 # vidforge
 
-Video editing for AI agents. No GUI, no account, no vendor lock-in: a CLI, a Python API and an MCP server that any agent can drive — Muse, Antigravity, Codex, Claude Code, or a local model.
+Cut, resize and filter video with ffmpeg, without writing ffmpeg flags by hand. You describe the edit as a list of ops; vidforge turns it into a single ffmpeg call and prints JSON back.
 
 It shells out to ffmpeg, so install that first (`apt install ffmpeg` / `brew install ffmpeg`).
 
@@ -51,13 +51,13 @@ vidforge join -i a.mp4 b.mp4 -o full.mp4
 
 ## How an agent uses it
 
-You translate the user's words into ops. `vidforge ops` lists every operation with its parameters and valid ranges, so there is nothing to guess. Examples:
+You turn the user's words into ops. `vidforge ops` lists every operation with its parameters and valid ranges, so there is nothing to guess. The usual requests:
 
 - "cut the first 5 seconds and make it vertical" -> trim, crop
 - "make a gif of the best 2 seconds" -> gif
 - "quieter, and fade out at the end" -> volume, fade_out
 
-If the user asks for something that is not an op yet, add it — see CONTRIBUTING.md. That is the whole point: the tool grows with what people ask for.
+If the edit you need is not an op yet, CONTRIBUTING.md explains how to add it.
 
 ## Use it from Python
 
@@ -72,7 +72,7 @@ out = apply_ops("clip.mp4", "clip-edit.mp4", [
 
 ## MCP server
 
-Any MCP client can use vidforge as tools:
+Any MCP client can use vidforge as tools, including join_videos:
 
 ```sh
 vidforge mcp

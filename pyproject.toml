@@ -5,15 +5,30 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vidforge"
 version = "0.1.0"
-description = "Professional video editing toolkit built for AI agents. CLI, Python API and MCP server."
+description = "Video edits as a list of ops over ffmpeg: trim, scale, filters, speed, JSON in and out."
 readme = "README.md"
 license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia",
+]
+
 authors = [{name = "Alfredo Ramos"}]
+
 requires-python = ">=3.10"
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Alfredo-ctrl/vidforge"
+Repository = "https://github.com/Alfredo-ctrl/vidforge"
 
 [project.scripts]
 vidforge = "vidforge.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["vidforge*"]
+include = ["vidforge*", "forge_common*"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
