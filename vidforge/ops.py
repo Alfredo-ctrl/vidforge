@@ -1,16 +1,43 @@
-"""Video ops. One op = one entry in OPS plus one small builder below.
+"""Video ops over ffmpeg. One op = one entry in OPS plus one small builder.
 
-Every op turns into ffmpeg filters, so the whole edit runs in one ffmpeg
-call. No GUI, no account, just ffmpeg doing the work.
+Builders only collect filters in a Ctx; video.py runs the single ffmpeg
+call. Number parsing and trim live in forge_common.ffmpeg, shared with
+audforge.
 """
 
 import json
 import math
-import subprocess
+import os
+import tempfile
+
+from forge_common.ffmpeg import atempo_chain as _atempo_chain
+from forge_common.ffmpeg import num as _num
+from forge_common.ffmpeg import probe_raw
+from forge_common.ffmpeg import trim as _trim
+from forge_common.ffmpeg import whole as _int
 
 FFMPEG = "ffmpeg"
 FFPROBE = "ffprobe"
-FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+_FONT_CANDIDATES = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+)
+
+
+def find_font(explicit=""):
+    """Font file for the text op: explicit path, VIDFORGE_FONT, or a known one."""
+    for cand in (explicit, os.environ.get("VIDFORGE_FONT", "")):
+        if cand:
+            if os.path.isfile(cand):
+                return cand
+            raise ValueError(f"'text': no font file at '{cand}'")
+    for cand in _FONT_CANDIDATES:
+        if os.path.isfile(cand):
+            return cand
+    raise ValueError("'text': no font found; set VIDFORGE_FONT to a .ttf file")
 
 
 class Ctx:
@@ -28,58 +55,8 @@ class Ctx:
         self.gif = {}
         self.mute = False
         self.loops = 0
-
-
-def _num(op, params, key, default=None, lo=None, hi=None):
-    v = params.get(key, default)
-    if v is None:
-        raise ValueError(f"'{op}' needs '{key}'")
-    try:
-        v = float(v)
-    except (TypeError, ValueError):
-        raise ValueError(f"'{op}': '{key}' has to be a number, got {params.get(key)!r}")
-    if lo is not None and v < lo:
-        raise ValueError(f"'{op}': '{key}' can't be under {lo}")
-    if hi is not None and v > hi:
-        raise ValueError(f"'{op}': '{key}' can't be over {hi}")
-    return v
-
-
-def _int(op, params, key, default=None, lo=None, hi=None):
-    v = _num(op, params, key, default, lo, hi)
-    if v != int(v):
-        raise ValueError(f"'{op}': '{key}' has to be a whole number")
-    return int(v)
-
-
-def _atempo_chain(factor):
-    # atempo only takes 0.5-2.0, so chain it for bigger changes
-    parts = []
-    f = factor
-    while f > 2.0:
-        parts.append("atempo=2.0")
-        f /= 2.0
-    while f < 0.5:
-        parts.append("atempo=0.5")
-        f /= 0.5
-    parts.append(f"atempo={f:.4f}")
-    return parts
-
-
-def _trim(ctx, p):
-    start = _num("trim", p, "start", 0, lo=0)
-    end = p.get("end")
-    dur = p.get("duration")
-    if end is not None and dur is not None:
-        raise ValueError("'trim': give 'end' or 'duration', not both")
-    if end is not None:
-        end = _num("trim", p, "end", lo=0)
-        if end <= start:
-            raise ValueError("'trim': 'end' has to be after 'start'")
-        ctx.duration = end - start
-    elif dur is not None:
-        ctx.duration = _num("trim", p, "duration", lo=0.01)
-    ctx.start = start
+        self.fade_out_durations = []
+        self.text_files = []
 
 
 def _speed(ctx, p):
@@ -105,7 +82,6 @@ def _crop(ctx, p):
 
 
 def _pad(ctx, p):
-    # frame it in a bigger canvas, centred, for a fixed size or aspect
     w = _int("pad", p, "width", lo=16)
     h = _int("pad", p, "height", lo=16)
     color = p.get("color", "black")
@@ -187,7 +163,7 @@ def _deinterlace(ctx, p):
 
 
 def _edgedetect(ctx, p):
-    # outlines only, sketch look. high has to stay above low
+    # high has to stay above low
     low = _num("edgedetect", p, "low", 0.1, lo=0, hi=1)
     high = _num("edgedetect", p, "high", 0.4, lo=0, hi=1)
     if high <= low:
@@ -196,7 +172,6 @@ def _edgedetect(ctx, p):
 
 
 def _noise(ctx, p):
-    # film grain on top; 0 leaves the picture alone
     s = _int("noise", p, "strength", 20, lo=0, hi=100)
     if s == 0:
         return
@@ -204,24 +179,20 @@ def _noise(ctx, p):
 
 
 def _pixelate(ctx, p):
-    # chunky mosaic look, like an old game; bigger blocks = chunkier
     b = _int("pixelate", p, "block", 16, lo=2, hi=64)
     ctx.vf.append(f"pixelize=w={b}:h={b}")
 
 
 def _reverse(ctx, p):
-    # play it backwards, picture and sound together
     ctx.vf.append("reverse")
     ctx.af.append("areverse")
 
 
 def _invert(ctx, p):
-    # negative video, colours flipped; audio untouched
     ctx.vf.append("negate")
 
 
 def _sepia(ctx, p):
-    # warm old-photo tone; audio untouched
     strength = _num("sepia", p, "intensity", 1, lo=0, hi=1)
     ctx.vf.append(
         "colorchannelmixer="
@@ -232,7 +203,6 @@ def _sepia(ctx, p):
 
 
 def _loop(ctx, p):
-    # play the clip end to end N times, picture and sound together
     ctx.loops = _int("loop", p, "times", 2, lo=2, hi=10)
 
 
@@ -251,21 +221,31 @@ def _fade_in(ctx, p):
 
 
 def _fade_out(ctx, p):
-    d = _num("fade_out", p, "duration", lo=0.1, hi=30)
-    ctx.vf.append(f"fade=t=out:st=0:d={d:.2f}")
-    ctx.af.append(f"afade=t=out:st=0:d={d:.2f}")
+    # the start time needs the clip length, which video.py knows; it builds
+    # the filter there instead of writing a wrong st=0 here
+    ctx.fade_out_durations.append(_num("fade_out", p, "duration", lo=0.1, hi=30))
 
 
 def _text(ctx, p):
     text = p.get("text")
     if not text:
         raise ValueError("'text': give some 'text' to draw")
-    safe = str(text).replace("'", "").replace(":", "\\:").replace("%", "\\%")
     x = p.get("x", "(w-text_w)/2")
     y = p.get("y", "h-text_h-20")
     size = _int("text", p, "fontsize", 32, lo=8, hi=200)
+    color = p.get("fontcolor", "white")
+    if not isinstance(color, str) or not color:
+        raise ValueError("'text': 'fontcolor' has to be a colour name or hex, e.g. 'white'")
+    font = find_font(p.get("font", ""))
+    # the text goes in a file: a quote inside text='...' swallows the comma
+    # before the next filter, so drawtext breaks on names like l'amour.
+    # the file is created last, so a bad font/size leaves nothing behind
+    fd, path = tempfile.mkstemp(prefix="forge-text-", suffix=".txt")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(str(text))
+    ctx.text_files.append(path)
     ctx.vf.append(
-        f"drawtext=fontfile={FONT}:text='{safe}':x={x}:y={y}:fontsize={size}:fontcolor=white:borderw=2:bordercolor=black"
+        f"drawtext=fontfile={font}:textfile={path}:x={x}:y={y}:fontsize={size}:fontcolor={color}:borderw=2:bordercolor=black"
     )
 
 
@@ -331,7 +311,7 @@ OPS = {
     "mute": {"description": "Drop the audio track.", "params": {}, "build": _mute},
     "fade_in": {"description": "Fade in from black, video and audio.", "params": {"duration": {"type": "number", "min": 0.1, "max": 30}}, "build": _fade_in},
     "fade_out": {"description": "Fade out to black, video and audio.", "params": {"duration": {"type": "number", "min": 0.1, "max": 30}}, "build": _fade_out},
-    "text": {"description": "Draw text on the video.", "params": {"text": {"type": "string"}, "x": {"type": "string", "default": "(w-text_w)/2"}, "y": {"type": "string", "default": "h-text_h-20"}, "fontsize": {"type": "integer", "default": 32, "min": 8, "max": 200}}, "build": _text},
+    "text": {"description": "Draw text on the video.", "params": {"text": {"type": "string"}, "x": {"type": "string", "default": "(w-text_w)/2"}, "y": {"type": "string", "default": "h-text_h-20"}, "fontsize": {"type": "integer", "default": 32, "min": 8, "max": 200}, "font": {"type": "string", "default": ""}, "fontcolor": {"type": "string", "default": "white"}}, "build": _text},
     "extract_audio": {"description": "Save just the audio as mp3, wav, aac or ogg.", "params": {"format": {"type": "string", "enum": ["mp3", "wav", "aac", "ogg"], "default": "mp3"}}, "build": _extract_audio},
     "thumbnail": {"description": "Grab one frame as an image.", "params": {"time": {"type": "number", "default": 1, "min": 0}, "width": {"type": "integer", "min": 16}}, "build": _thumbnail},
     "gif": {"description": "Make a small looping gif from a clip.", "params": {"start": {"type": "number", "default": 0, "min": 0}, "duration": {"type": "number", "default": 2, "min": 0.5, "max": 30}, "fps": {"type": "integer", "default": 10, "min": 1, "max": 30}, "width": {"type": "integer", "default": 320, "min": 16, "max": 1920}}, "build": _gif},
@@ -361,14 +341,7 @@ def build_ctx(ops):
 
 def probe(path):
     """ffprobe as a dict: duration, size, fps, codecs, has_audio."""
-    try:
-        out = subprocess.run(
-            [FFPROBE, "-v", "quiet", "-print_format", "json", "-show_streams", "-show_format", path],
-            capture_output=True, text=True, check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        raise ValueError(f"can't read '{path}': {e}")
-    data = json.loads(out.stdout)
+    data = probe_raw(path)
     info = {"duration": None, "width": None, "height": None, "fps": None, "has_audio": False}
     for s in data.get("streams", []):
         if s.get("codec_type") == "video" and info["width"] is None:

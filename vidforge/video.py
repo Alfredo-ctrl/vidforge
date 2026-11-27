@@ -1,40 +1,39 @@
 """Run ffmpeg. One call per edit, JSON-friendly errors."""
 
-import json
-import subprocess
+import os
 
+from forge_common.ffmpeg import concat_list, fade_out_at, run
 from .ops import FFMPEG, build_ctx, probe
 
 _AUDIO_CODEC = {"mp3": "libmp3lame", "wav": "pcm_s16le", "aac": "aac", "ogg": "libvorbis"}
 
 
-def _run(cmd):
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if res.returncode != 0:
-        err = (res.stderr or "").strip().splitlines()
-        tail = " ".join(err[-3:]) if err else "ffmpeg failed"
-        raise RuntimeError(f"ffmpeg failed: {tail[:500]}")
-    return res
-
-
 def apply_ops(input_path, output_path, ops):
     ctx, applied = build_ctx(ops)
+    try:
+        return _apply_ops(ctx, applied, input_path, output_path)
+    finally:
+        for path in ctx.text_files:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
+def _apply_ops(ctx, applied, input_path, output_path):
     info_in = probe(input_path)
 
-    # fade_out needs the real end time, so pin it to the clip length
-    if "fade_out" in applied:
+    # fade_out starts duration seconds before the end, so build the filter
+    # now that the clip length is known, instead of patching a st=0 filter
+    if ctx.fade_out_durations:
         total = ctx.duration if ctx.duration is not None else info_in["duration"]
+        if total is None:
+            raise ValueError(f"can't fade out '{input_path}': unknown duration")
         if ctx.loops:
             total = total * ctx.loops
-        start = ctx.start or 0
-        for i, f in enumerate(ctx.vf):
-            if f.startswith("fade=t=out:"):
-                d = float(f.split("d=")[1])
-                ctx.vf[i] = f"fade=t=out:st={max(total - d, 0):.2f}:d={d:.2f}"
-        for i, f in enumerate(ctx.af):
-            if f.startswith("afade=t=out:"):
-                d = float(f.split("d=")[1])
-                ctx.af[i] = f"afade=t=out:st={max(total - d, 0):.2f}:d={d:.2f}"
+        for d in ctx.fade_out_durations:
+            ctx.vf.append(fade_out_at("video", d, total))
+            ctx.af.append(fade_out_at("audio", d, total))
 
     cmd = [FFMPEG, "-y", "-v", "error"]
     if ctx.start is not None:
@@ -71,7 +70,7 @@ def apply_ops(input_path, output_path, ops):
             cmd += ["-c:a", "aac"]
 
     cmd.append(output_path)
-    _run(cmd)
+    run(cmd)
 
     out = {"output": output_path, "ops_applied": applied}
     if ctx.mode in ("video", "gif"):
@@ -89,12 +88,13 @@ def join_videos(inputs, output_path):
         raise ValueError("join needs at least 2 videos")
     for p in inputs:
         probe(p)
-    with open("/tmp/vidforge-join.txt", "w") as f:
-        for p in inputs:
-            f.write(f"file '{p}'\n")
-    _run([FFMPEG, "-y", "-v", "error", "-f", "concat", "-safe", "0",
-          "-i", "/tmp/vidforge-join.txt", "-c:v", "libx264", "-preset", "fast",
-          "-c:a", "aac", output_path])
+    list_path = concat_list(inputs)
+    try:
+        run([FFMPEG, "-y", "-v", "error", "-f", "concat", "-safe", "0",
+             "-i", list_path, "-c:v", "libx264", "-preset", "fast",
+             "-c:a", "aac", output_path])
+    finally:
+        os.unlink(list_path)
     return {"output": output_path, "inputs": inputs, **probe(output_path)}
 
 
