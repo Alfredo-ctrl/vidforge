@@ -97,6 +97,12 @@ class TestVidforge(unittest.TestCase):
         self.assertTrue(out["has_audio"])
         self.assertTrue(os.path.getsize(self.out("deint.mp4")) > 1000)
 
+    def test_edgedetect(self):
+        out = apply_ops(self.clip, self.out("edge.mp4"), [{"op": "edgedetect"}])
+        self.assertAlmostEqual(out["duration"], 4, delta=0.3)
+        self.assertTrue(out["has_audio"])
+        self.assertTrue(os.path.getsize(self.out("edge.mp4")) > 1000)
+
     def test_pad(self):
         out = apply_ops(self.clip, self.out("pad.mp4"), [{"op": "pad", "width": 400, "height": 300}])
         self.assertEqual((out["width"], out["height"]), (400, 300))

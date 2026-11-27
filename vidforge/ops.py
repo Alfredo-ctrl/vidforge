@@ -186,6 +186,15 @@ def _deinterlace(ctx, p):
     ctx.vf.append(f"yadif=mode={mode}")
 
 
+def _edgedetect(ctx, p):
+    # outlines only, sketch look. high has to stay above low
+    low = _num("edgedetect", p, "low", 0.1, lo=0, hi=1)
+    high = _num("edgedetect", p, "high", 0.4, lo=0, hi=1)
+    if high <= low:
+        raise ValueError("'edgedetect': 'high' has to be above 'low'")
+    ctx.vf.append(f"edgedetect=low={low:.2f}:high={high:.2f}")
+
+
 def _noise(ctx, p):
     # film grain on top; 0 leaves the picture alone
     s = _int("noise", p, "strength", 20, lo=0, hi=100)
@@ -311,6 +320,7 @@ OPS = {
     "vignette": {"description": "Darken the corners, 0 to 1.", "params": {"strength": {"type": "number", "min": 0, "max": 1}}, "build": _vignette},
     "denoise": {"description": "Clean up grain and noise.", "params": {}, "build": _denoise},
     "deinterlace": {"description": "Fix combing on interlaced footage (old TV, DV tapes).", "params": {"mode": {"type": "integer", "default": 0, "min": 0, "max": 3}}, "build": _deinterlace},
+    "edgedetect": {"description": "Outlines only, like a pencil sketch. Tune low/high to catch more or fewer edges.", "params": {"low": {"type": "number", "default": 0.1, "min": 0, "max": 1}, "high": {"type": "number", "default": 0.4, "min": 0, "max": 1}}, "build": _edgedetect},
     "noise": {"description": "Add film grain on top, 0 to 100. 0 leaves the picture alone.", "params": {"strength": {"type": "integer", "default": 20, "min": 0, "max": 100}}, "build": _noise},
     "pixelate": {"description": "Chunky mosaic look, like an old game. Bigger blocks are chunkier.", "params": {"block": {"type": "integer", "default": 16, "min": 2, "max": 64}}, "build": _pixelate},
     "reverse": {"description": "Play the clip backwards, video and audio.", "params": {}, "build": _reverse},
