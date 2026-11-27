@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -21,6 +22,16 @@ def _make_clip(path, duration=4):
         check=True,
     )
 
+
+def _mean_volume(path, start, duration=0.5):
+    res = subprocess.run(
+        ["ffmpeg", "-v", "info", "-ss", str(start), "-t", str(duration),
+         "-i", path, "-af", "volumedetect", "-f", "null", "-"],
+        capture_output=True, text=True, check=True)
+    for line in res.stderr.splitlines():
+        if "mean_volume" in line:
+            return float(line.split("mean_volume:")[1].split("dB")[0])
+    raise AssertionError("volumedetect printed no mean_volume")
 
 class TestVidforge(unittest.TestCase):
     @classmethod
@@ -156,8 +167,45 @@ class TestVidforge(unittest.TestCase):
         out2 = apply_ops(self.clip, self.out("comp.mp4"), [{"op": "compress", "crf": 28}])
         self.assertTrue(os.path.getsize(self.out("comp.mp4")) > 1000)
 
+    def test_fade_out_fades_the_end_not_the_start(self):
+        out = apply_ops(self.clip, self.out("fade.mp4"),
+                        [{"op": "fade_out", "duration": 1}])
+        self.assertAlmostEqual(out["duration"], 4, delta=0.3)
+        # the last half second has to be quieter than the first: the fade
+        # starts 1s before the end, not at second 0
+        self.assertLess(_mean_volume(self.out("fade.mp4"), 3.5),
+                        _mean_volume(self.out("fade.mp4"), 0))
+
+    def test_text_keeps_apostrophes(self):
+        out = apply_ops(self.clip, self.out("apos.mp4"),
+                        [{"op": "text", "text": "l'amour", "fontsize": 24}])
+        self.assertTrue(os.path.getsize(self.out("apos.mp4")) > 1000)
+        # same text chained after another filter: a quote inside text='...'
+        # used to swallow the comma before the next filter and fail
+        out = apply_ops(self.clip, self.out("apos-fade.mp4"),
+                        [{"op": "fade_out", "duration": 1},
+                         {"op": "text", "text": "l'amour", "fontsize": 24}])
+        self.assertTrue(os.path.getsize(self.out("apos-fade.mp4")) > 1000)
+
+    def test_text_font_env(self):
+        from vidforge.ops import build_ctx, find_font
+        with mock.patch.dict(os.environ, {"VIDFORGE_FONT": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"}):
+            self.assertTrue(find_font().endswith("DejaVuSans.ttf"))
+        with mock.patch.dict(os.environ, {"VIDFORGE_FONT": "/nope/missing.ttf"}):
+            with self.assertRaises(ValueError):
+                find_font()
+        with self.assertRaises(ValueError):
+            build_ctx([{"op": "text", "text": "hi", "font": "/nope/missing.ttf"}])
+
     def test_join(self):
         out = join_videos([self.clip, self.clip], self.out("joined.mp4"))
+        self.assertAlmostEqual(out["duration"], 8, delta=0.5)
+
+    def test_join_with_quote_in_name(self):
+        quoted = os.path.join(self.tmp, "it's.mp4")
+        import shutil
+        shutil.copy(self.clip, quoted)
+        out = join_videos([self.clip, quoted], self.out("joined-q.mp4"))
         self.assertAlmostEqual(out["duration"], 8, delta=0.5)
 
     def test_unknown_op_and_bad_param(self):
