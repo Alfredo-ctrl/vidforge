@@ -180,6 +180,12 @@ def _denoise(ctx, p):
     ctx.vf.append("hqdn3d")
 
 
+def _deinterlace(ctx, p):
+    # yadif: fixes the combing on old interlaced footage (TV, DV tapes)
+    mode = _int("deinterlace", p, "mode", 0, lo=0, hi=3)
+    ctx.vf.append(f"yadif=mode={mode}")
+
+
 def _noise(ctx, p):
     # film grain on top; 0 leaves the picture alone
     s = _int("noise", p, "strength", 20, lo=0, hi=100)
@@ -304,6 +310,7 @@ OPS = {
     "sharpen": {"description": "Crisp edges, 0 to 5.", "params": {"strength": {"type": "number", "min": 0, "max": 5}}, "build": _sharpen},
     "vignette": {"description": "Darken the corners, 0 to 1.", "params": {"strength": {"type": "number", "min": 0, "max": 1}}, "build": _vignette},
     "denoise": {"description": "Clean up grain and noise.", "params": {}, "build": _denoise},
+    "deinterlace": {"description": "Fix combing on interlaced footage (old TV, DV tapes).", "params": {"mode": {"type": "integer", "default": 0, "min": 0, "max": 3}}, "build": _deinterlace},
     "noise": {"description": "Add film grain on top, 0 to 100. 0 leaves the picture alone.", "params": {"strength": {"type": "integer", "default": 20, "min": 0, "max": 100}}, "build": _noise},
     "pixelate": {"description": "Chunky mosaic look, like an old game. Bigger blocks are chunkier.", "params": {"block": {"type": "integer", "default": 16, "min": 2, "max": 64}}, "build": _pixelate},
     "reverse": {"description": "Play the clip backwards, video and audio.", "params": {}, "build": _reverse},
